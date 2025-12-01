@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Echo Halo | 聽覺轉化景觀</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #050505;
+            color: #e0e0e0;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        h1, h2, h3, .tech-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        }
+
+        /* 3D Canvas Background */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        /* Modal Overlay */
+        #modal-overlay {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+
+        /* Anatomy Hover Panel */
+        .anatomy-detail-panel {
+            opacity: 0;
+            transform: translateX(20px);
+            transition: all 0.3s ease;
+        }
+        .anatomy-detail-panel.active {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        /* Anatomy Hotspots */
+        .anatomy-hotspot {
+            transition: all 0.3s ease;
+        }
+        .anatomy-hotspot:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #a855f7;
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px rgba(168,85,247,0.8);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 2px;
+        }
+
+        /* Mobile specific fixes */
+        @media (max-width: 768px) {
+            .anatomy-detail-panel {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                top: auto;
+                transform: translateY(100%);
+                background: #111;
+                border-top: 1px solid #333;
+                z-index: 50;
+                padding-bottom: 20px;
+            }
+            .anatomy-detail-panel.active {
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- 3D Background Container -->
+    <div id="canvas-container"></div>
+    
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+        <div id="modal-card" class="modal-content w-full max-w-4xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+            <div id="modal-inner-content" class="overflow-y-auto overflow-x-hidden h-full">
+                <!-- Dynamic Content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Wrapper -->
+    <main class="container mx-auto px-4 md:px-6 py-8 relative z-10 max-w-7xl">
+        
+        <!-- Header -->
+        <header class="mb-10 fade-in-up pointer-events-none">
+            <div class="flex flex-col md:flex-row justify-between items-end border-b border-white/10 pb-6 pointer-events-auto">
+                <div>
+                    <h1 class="text-4xl md:text-7xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-purple-400">Echo Halo</h1>
+                    <p class="text-base md:text-xl text-gray-400 mt-2 font-light tracking-widest uppercase">
+                        Auditory-Tactile Landscape
+                    </p>
+                </div>
+                <div class="text-right mt-4 md:mt-0">
+                    <span class="bg-white/10 px-3 py-1 rounded-full text-[10px] md:text-xs font-mono text-purple-300 border border-purple-500/30">2030 SPECULATIVE DESIGN</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Grid Layout for Top Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-16">
+            
+            <!-- Hero Image -->
+            <div onclick="openStandardModal('hero')" class="lg:col-span-8 glass-panel min-h-[300px] md:min-h-[400px] relative group flex flex-col justify-end">
+                <div class="absolute inset-0 bg-black">
+                    <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" class="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity duration-700" alt="Ambience">
+                </div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                
+                <div class="relative z-20 p-6 md:p-8 max-w-2xl">
+                    <div class="bg-amber-500/20 text-amber-300 text-xs px-2 py-1 rounded inline-block mb-2 backdrop-blur-sm">互動情境</div>
+                    <h2 class="text-2xl md:text-3xl font-bold text-white mb-2">在混亂中找到平靜</h2>
+                    <p class="text-gray-300 text-sm md:text-base line-clamp-2 md:line-clamp-none">
+                        窗外是飛行車流交織的流光與城市低頻噪音。室內，Echo Halo 正呈現溫暖的琥珀色，纖維順服地倒向一邊，與窗外的冷色調混亂形成對比。
+                    </p>
+                </div>
+            </div>
+
+            <!-- Product Showcase -->
+            <div class="lg:col-span-4 flex flex-col gap-4">
+                
+                <!-- Card 1: Alert (Interactive Noise) -->
+                <div onclick="openAlertInteraction()" class="glass-panel p-4 flex items-center gap-4 hover:bg-purple-900/30 transition-colors group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-r from-purple-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-16 h-16 rounded-lg bg-gray-900 border border-purple-500/50 flex items-center justify-center shrink-0 z-10 shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                        <i class="fas fa-sliders-h text-purple-400 text-2xl group-hover:animate-pulse"></i>
+                    </div>
+                    <div class="z-10">
+                        <h3 class="text-purple-300 font-bold text-sm uppercase flex items-center gap-2">
+                            警戒態 <span class="text-[10px] bg-purple-500 text-black px-1 rounded font-bold">互動體驗</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">拖動滑桿模擬環境噪音，觀察 Echo Halo 的炸毛反應。</p>
+                    </div>
+                </div>
+
+                <!-- Card 2: Calm (Camera + White Noise) -->
+                <div onclick="openCalmInteraction()" class="glass-panel p-4 flex items-center gap-4 hover:bg-amber-900/30 transition-colors border-amber-500/30 group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-r from-amber-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div class="w-16 h-16 rounded-lg bg-gray-900 border border-amber-500/50 flex items-center justify-center shrink-0 z-10 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                        <i class="fas fa-camera text-amber-400 text-2xl group-hover:animate-bounce"></i>
+                    </div>
+                    <div class="z-10">
+                        <h3 class="text-amber-300 font-bold text-sm uppercase flex items-center gap-2">
+                            安撫態 <span class="text-[10px] bg-amber-500 text-black px-1 rounded font-bold">鏡頭 + 白噪音</span>
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-1">手掌遮擋鏡頭觸發視覺安撫與白噪音療癒。</p>
+                    </div>
+                </div>
+
+                <!-- Card 3: Texture -->
+                <div onclick="openStandardModal('texture')" class="glass-panel p-4 flex items-center gap-4 hover:bg-gray-800/50 transition-colors group">
+                    <div class="w-16 h-16 rounded-lg bg-gray-800 border border-gray-600 flex items-center justify-center shrink-0 overflow-hidden relative">
+                         <img src="https://images.unsplash.com/photo-1617396900799-f4ec2b43c7ae?q=80&w=2070&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover opacity-60">
+                        <i class="fas fa-fingerprint text-white text-xl z-10 drop-shadow-md"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-gray-300 font-bold text-sm uppercase">記憶細節</h3>
+                        <p class="text-xs text-gray-400 mt-1">底座微距特寫：因長期受噪與撫摸而形成的「風剪記憶」。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle Section: Philosophy & Anatomy -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-16">
+            
+            <!-- Design Philosophy -->
+            <div onclick="openStandardModal('philosophy')" class="lg:col-span-5 glass-panel p-8 border-l-4 border-l-amber-500 hover:bg-gray-800/80">
+                <h2 class="text-xl md:text-2xl font-bold mb-6 tech-font flex items-center text-white">
+                    <i class="fas fa-quote-left text-amber-500 mr-3 text-lg"></i> 設計理念
+                </h2>
+                <div class="prose prose-invert prose-sm">
+                    <p class="text-base md:text-lg font-medium text-white mb-4">
+                        Echo Halo 不是「隔絕」，而是賦予高敏感族群<span class="text-amber-300">「主動轉化焦慮的能力」</span>。
+                    </p>
+                    <p class="text-sm text-gray-400">它是輔助調節情緒的「數位共生寵物」。</p>
+                    <div class="mt-4 flex items-center text-xs text-amber-500 font-bold uppercase tracking-wider">
+                        查看完整論述 <i class="fas fa-arrow-right ml-2"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Diagram (Hover Interaction with Icons) -->
+            <div class="lg:col-span-7 glass-panel p-0 relative min-h-[400px] md:min-h-[500px] flex overflow-hidden">
+                <!-- Main Diagram Area -->
+                <div class="flex-1 relative flex items-center justify-center bg-black/40 p-4">
+                    <h2 class="absolute top-6 left-6 text-lg md:text-xl font-bold text-gray-500 tech-font pointer-events-none">構造解析 ANATOMY</h2>
+                    <p class="absolute top-12 left-6 text-xs text-gray-600 pointer-events-none hidden md:block">HOVER ICONS TO EXPLORE</p>
+                    
+                    <!-- Diagram Visual -->
+                    <div class="relative w-64 h-64 md:w-80 md:h-80">
+                        <!-- Center Halo -->
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="w-32 h-32 md:w-40 md:h-40 rounded-full border border-gray-600 animate-pulse bg-black/50 backdrop-blur-sm z-10"></div>
+                            <!-- Dashed rings -->
+                            <div class="absolute w-48 h-48 md:w-60 md:h-60 rounded-full border border-dashed border-gray-700 opacity-50"></div>
+                        </div>
+
+                        <!-- Hotspots with Icons -->
+                        <!-- Top: Fibers -->
+                        <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 group cursor-help" onmouseenter="showAnatomyDetail('fibers')">
+                            <div class="anatomy-hotspot w-10 h-10 rounded-full bg-gray-900 border border-amber-500 flex items-center justify-center text-amber-500">
+                                <i class="fas fa-wind"></i>
+                            </div>
+                            <div class="absolute top-12 left-1/2 -translate-x-1/2 text-[10px] text-amber-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">觸覺光纖</div>
+                        </div>
+
+                        <!-- Bottom: Light -->
+                        <div class="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 z-20 group cursor-help" onmouseenter="showAnatomyDetail('light')">
+                            <div class="anatomy-hotspot w-10 h-10 rounded-full bg-gray-900 border border-purple-500 flex items-center justify-center text-purple-500">
+                                <i class="fas fa-lightbulb"></i>
+                            </div>
+                            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 text-[10px] text-purple-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">AI 光譜</div>
+                        </div>
+
+                        <!-- Left: SMA -->
+                        <div class="absolute top-1/2 left-0 transform -translate-x-1/2 -translate-y-1/2 z-20 group cursor-help" onmouseenter="showAnatomyDetail('sma')">
+                            <div class="anatomy-hotspot w-10 h-10 rounded-full bg-gray-900 border border-blue-500 flex items-center justify-center text-blue-500">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div class="absolute top-12 left-1/2 -translate-x-1/2 text-[10px] text-blue-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">SMA 驅動</div>
+                        </div>
+
+                        <!-- Right: Memory -->
+                        <div class="absolute top-1/2 right-0 transform translate-x-1/2 -translate-y-1/2 z-20 group cursor-help" onmouseenter="showAnatomyDetail('memory')">
+                            <div class="anatomy-hotspot w-10 h-10 rounded-full bg-gray-900 border border-gray-500 flex items-center justify-center text-gray-300">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="absolute top-12 left-1/2 -translate-x-1/2 text-[10px] text-gray-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">有機記憶</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Side Detail Panel -->
+                <div id="anatomy-panel" class="anatomy-detail-panel w-full md:w-64 bg-gray-900/95 border-t md:border-l border-white/10 p-6 flex flex-col justify-center absolute md:relative right-0 h-auto md:h-full z-30">
+                    <div id="anatomy-content" class="text-sm">
+                        <p class="text-gray-500 text-center italic">請將滑鼠移至左側構造圖示查看細節。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Problem Context (With Images) -->
+        <div class="mb-16">
+            <h3 class="text-xl font-bold mb-6 text-gray-400 pl-2 border-l-2 border-gray-600">問題脈絡 PROBLEM CONTEXT</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Context 1 -->
+                <div class="glass-panel h-64 relative group overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?q=80&w=2070&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-50">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 p-6">
+                        <div class="text-red-400 text-2xl mb-2"><i class="fas fa-city"></i></div>
+                        <h4 class="text-lg font-bold text-white mb-1">無孔不入的侵入</h4>
+                        <p class="text-xs text-gray-400">2030年城市密度極限，物理隔絕失效，低頻噪音成為居家常態。</p>
+                    </div>
+                </div>
+                <!-- Context 2 -->
+                <div class="glass-panel h-64 relative group overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1493836512294-502baa1986e2?q=80&w=2070&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-50">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 p-6">
+                        <div class="text-purple-400 text-2xl mb-2"><i class="fas fa-brain"></i></div>
+                        <h4 class="text-lg font-bold text-white mb-1">HSP 感官過載</h4>
+                        <p class="text-xs text-gray-400">高敏感族群長期處於「戰或逃」警戒狀態，導致能量耗竭。</p>
+                    </div>
+                </div>
+                <!-- Context 3: Fixed Image with better Isolation vibe -->
+                <div class="glass-panel h-64 relative group overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1515378960530-7c0da6231fb1?q=80&w=2070&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-60" alt="Isolation with Headphones">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
+                    <div class="absolute bottom-0 left-0 p-6">
+                        <div class="text-blue-400 text-2xl mb-2"><i class="fas fa-headphones-alt"></i></div>
+                        <h4 class="text-lg font-bold text-white mb-1">被動防禦的孤獨</h4>
+                        <p class="text-xs text-gray-400 leading-relaxed">
+                            傳統降噪耳機雖然切斷了噪音，卻也切斷了與世界的連結。在寂靜中，人反而陷入缺乏情感支持的數位孤島。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Map (Interactive with Sound) -->
+        <div class="glass-panel p-8 md:p-12 mb-8 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-t-2 border-amber-500/20">
+            <div class="max-w-3xl mx-auto text-center mb-12">
+                <h2 class="text-2xl md:text-3xl font-bold tech-font mb-4">2030 全感官互動體驗地圖</h2>
+                <p class="text-gray-400 text-sm">
+                    <i class="fas fa-info-circle text-amber-500"></i> 請點擊下方圖示，觸發背景 Echo Halo 狀態與<span class="text-white font-bold">模擬音效</span>
+                </p>
+            </div>
+
+            <div class="relative py-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 relative z-10">
+                    <!-- Step 1 -->
+                    <div onclick="triggerSystemState(0)" class="map-step flex flex-col items-center text-center group cursor-pointer p-2 rounded hover:bg-white/5" id="step-0">
+                        <div class="icon-circle w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-red-500/30 bg-red-900/20 flex items-center justify-center mb-2 text-red-400 text-xl transition-all">
+                            <i class="fas fa-volume-up"></i>
+                        </div>
+                        <h4 class="font-bold text-xs md:text-sm text-red-200">環境噪音</h4>
+                    </div>
+                    <!-- Step 2 -->
+                    <div onclick="triggerSystemState(1)" class="map-step flex flex-col items-center text-center group cursor-pointer p-2 rounded hover:bg-white/5" id="step-1">
+                        <div class="icon-circle w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-purple-500/30 bg-purple-900/20 flex items-center justify-center mb-2 text-purple-400 text-xl transition-all">
+                            <i class="fas fa-eye"></i>
+                        </div>
+                        <h4 class="font-bold text-xs md:text-sm text-purple-200">視覺警戒</h4>
+                    </div>
+                    <!-- Step 3 -->
+                    <div onclick="triggerSystemState(2)" class="map-step flex flex-col items-center text-center group cursor-pointer p-2 rounded hover:bg-white/5" id="step-2">
+                        <div class="icon-circle w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-amber-500/30 bg-amber-900/20 flex items-center justify-center mb-2 text-amber-400 text-xl transition-all">
+                            <i class="fas fa-hand-holding-heart"></i>
+                        </div>
+                        <h4 class="font-bold text-xs md:text-sm text-amber-200">主動撫摸</h4>
+                    </div>
+                    <!-- Step 4 -->
+                    <div onclick="triggerSystemState(3)" class="map-step flex flex-col items-center text-center group cursor-pointer p-2 rounded hover:bg-white/5" id="step-3">
+                        <div class="icon-circle w-16 h-16 md:w-20 md:h-20 rounded-full border-2 border-green-500/30 bg-green-900/20 flex items-center justify-center mb-2 text-green-400 text-xl transition-all">
+                            <i class="fas fa-spa"></i>
+                        </div>
+                        <h4 class="font-bold text-xs md:text-sm text-green-200">平靜共生</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="flex justify-between items-center py-6 border-t border-white/10 text-gray-500 text-xs md:text-sm">
+            <div>
+                <p class="font-bold text-gray-300">Echo Halo Project</p>
+                <p>2030 Speculative Design / Sensory Interface</p>
+            </div>
+            <div class="text-right">
+                <p>Designed for HSP</p>
+            </div>
+        </footer>
+
+    </main>
+
+    <!-- Audio Engine for Sound Synthesis -->
+    <script>
+        const soundEngine = {
+            ctx: null,
+            whiteNoiseNode: null,
+            whiteNoiseGain: null,
+            
+            init: function() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            
+            // Helper: Create Noise Buffer
+            createNoiseBuffer: function() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 2; // 2 seconds buffer
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                return buffer;
+            },
+
+            // Play simulated traffic/rumble
+            playTraffic: function(intensity = 1) {
+                this.init();
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(50, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 1);
+                
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.2 * intensity, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(t + 1.5);
+            },
+
+            // Play Alert Glitch
+            playAlert: function() {
+                this.init();
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, t);
+                osc.frequency.linearRampToValueAtTime(800, t + 0.1);
+                
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.1, t);
+                gain.gain.linearRampToValueAtTime(0, t + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(t + 0.3);
+            },
+
+            // Play transition sweep
+            playSweep: function() {
+                this.init();
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, t);
+                osc.frequency.exponentialRampToValueAtTime(600, t + 1);
+                
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.2, t + 0.5);
+                gain.gain.linearRampToValueAtTime(0, t + 1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(t + 1);
+            },
+
+            // Toggle Continuous White Noise (For Camera Calm Mode)
+            toggleWhiteNoise: function(enable) {
+                this.init();
+                
+                // Start Noise
+                if (enable && !this.whiteNoiseNode) {
+                    const buffer = this.createNoiseBuffer();
+                    this.whiteNoiseNode = this.ctx.createBufferSource();
+                    this.whiteNoiseNode.buffer = buffer;
+                    this.whiteNoiseNode.loop = true;
+                    
+                    // Filter to make it softer (Pink/Brown-ish)
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 500;
+
+                    this.whiteNoiseGain = this.ctx.createGain();
+                    this.whiteNoiseGain.gain.setValueAtTime(0, this.ctx.currentTime);
+                    this.whiteNoiseGain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 1); // Fade in
+
+                    this.whiteNoiseNode.connect(filter);
+                    filter.connect(this.whiteNoiseGain);
+                    this.whiteNoiseGain.connect(this.ctx.destination);
+                    this.whiteNoiseNode.start();
+                } 
+                // Stop Noise
+                else if (!enable && this.whiteNoiseNode) {
+                    if (this.whiteNoiseGain) {
+                        this.whiteNoiseGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.5); // Fade out
+                    }
+                    setTimeout(() => {
+                        if (this.whiteNoiseNode) {
+                            this.whiteNoiseNode.stop();
+                            this.whiteNoiseNode = null;
+                        }
+                    }, 600);
+                }
+            }
+        };
+    </script>
+
+    <!-- Modal & Interaction Logic -->
+    <script>
+        const contentData = {
+            'hero': {
+                title: "2030 情境：在混亂中找到平靜",
+                image: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop",
+                body: `<p class="mb-4 text-gray-300">「這不是一個為了隔絕而生的產品，而是一個為了共存而生的夥伴。」</p><p class="text-gray-400 text-sm leading-relaxed">Anna，28歲，自由接案者，典型的 HSP。她對聲音的邊界感極為敏銳。當窗外有突發的警笛聲，Echo Halo 的纖維會瞬間豎起，發出紫色警示光。Anna 伸出手輕撫，紫光漸變為暖黃。那一刻，她不僅安撫了裝置，也安撫了自己。</p>`
+            },
+            'texture': {
+                title: "有機記憶 (Memory Texture)",
+                image: "https://images.unsplash.com/photo-1617396900799-f4ec2b43c7ae?q=80&w=2070&auto=format&fit=crop",
+                body: `<p class="text-gray-300 mb-4">看不見的時間，摸得到的形狀。</p><p class="text-gray-400 text-sm">Echo Halo 引入了「聲波向性」概念。若噪音長期來自左側，裝置左側纖維會呈現永久性彎曲。這不是損壞，而是與環境共生的證明。</p>`
+            },
+            'philosophy': {
+                title: "設計哲學",
+                image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop",
+                body: `<p class="text-gray-300">在高壓力的未來，我們需要有溫度的陪伴者。Echo Halo 將無情的噪音數據，翻譯成炸毛、呼吸等生物語言，讓焦慮具象化並可被撫平。</p>`
+            }
+        };
+
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalInner = document.getElementById('modal-inner-content');
+
+        function openStandardModal(id) {
+            const data = contentData[id];
+            if (!data) return;
+            modalInner.innerHTML = `
+                <div class="relative h-64 w-full overflow-hidden">
+                    <img src="${data.image}" class="w-full h-full object-cover opacity-80" alt="${data.title}">
+                    <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                    <div class="absolute bottom-6 left-6">
+                        <h2 class="text-3xl font-bold text-white tech-font shadow-black drop-shadow-lg">${data.title}</h2>
+                    </div>
+                </div>
+                <div class="p-8 text-gray-300 leading-relaxed">${data.body}</div>
+            `;
+            modalOverlay.classList.add('active');
+        }
+
+        // --- Alert Interaction: Noise Slider ---
+        function openAlertInteraction() {
+            modalInner.innerHTML = `
+                <div class="p-8 h-full flex flex-col justify-center items-center text-center">
+                    <div class="text-5xl text-purple-500 mb-4"><i class="fas fa-sliders-h"></i></div>
+                    <h2 class="text-3xl font-bold text-white mb-2">噪音模擬控制台</h2>
+                    <p class="text-gray-400 mb-8 max-w-md">拖動滑桿模擬外部噪音 (dB)，直接控制背景 Echo Halo 的狀態與聲音。</p>
+                    
+                    <div class="w-full max-w-lg bg-gray-800 p-6 rounded-xl border border-purple-500/30">
+                        <div class="flex justify-between text-xs text-gray-500 mb-2 font-mono">
+                            <span>40dB (Quiet)</span>
+                            <span>100dB (Noise)</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.01" value="0" id="noiseSlider" class="mb-4">
+                        <div class="flex justify-between items-center mt-2">
+                            <span id="noiseLabel" class="text-amber-400 font-bold text-xl">CALM</span>
+                            <div class="h-2 w-24 bg-gray-700 rounded-full overflow-hidden">
+                                <div id="noiseMeter" class="h-full bg-amber-400 w-0 transition-all duration-100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modalOverlay.classList.add('active');
+
+            const slider = document.getElementById('noiseSlider');
+            const label = document.getElementById('noiseLabel');
+            const meter = document.getElementById('noiseMeter');
+            
+            systemOverride = true; 
+            
+            // Slider Logic
+            slider.addEventListener('input', (e) => {
+                const noiseVal = parseFloat(e.target.value); // 0 (Calm) to 1 (Noise)
+                
+                // Map to Three.js targetCalmLevel
+                // CalmLevel: 1 = Calm, 0 = Alert, -0.5 = High Noise
+                // Formula: 1 - (noiseVal * 1.5)
+                targetCalmLevel = 1 - (noiseVal * 1.5);
+                
+                // Sound: Play traffic noise if intensity increases
+                if (Math.random() < noiseVal * 0.1) {
+                    soundEngine.playTraffic(noiseVal);
+                }
+
+                // UI Update
+                const pct = noiseVal * 100;
+                meter.style.width = `${pct}%`;
+                
+                if (noiseVal < 0.3) {
+                    label.innerText = "CALM";
+                    label.className = "text-amber-400 font-bold text-xl";
+                    meter.className = "h-full bg-amber-400 w-0 transition-all duration-100";
+                } else if (noiseVal < 0.7) {
+                    label.innerText = "ALERT";
+                    label.className = "text-purple-400 font-bold text-xl";
+                    meter.className = "h-full bg-purple-400 w-0 transition-all duration-100";
+                } else {
+                    label.innerText = "OVERLOAD";
+                    label.className = "text-red-500 font-bold text-xl animate-pulse";
+                    meter.className = "h-full bg-red-500 w-0 transition-all duration-100";
+                }
+            });
+        }
+
+        // --- Calm Interaction: Camera Bio-Feedback ---
+        let videoStream = null;
+        let animationFrameId = null;
+
+        function openCalmInteraction() {
+            modalInner.innerHTML = `
+                <div class="p-4 md:p-8 h-full flex flex-col justify-center items-center text-center">
+                    <div class="text-4xl text-amber-500 mb-2"><i class="fas fa-camera"></i></div>
+                    <h2 class="text-2xl font-bold text-white mb-2">生物回饋連結</h2>
+                    <p class="text-gray-400 mb-6 text-sm max-w-md">開啟鏡頭，用手掌遮擋畫面來觸發「安撫態」並播放白噪音。</p>
+                    
+                    <div class="w-full max-w-md aspect-video bg-black rounded-xl relative overflow-hidden mb-6 border border-amber-500/30 shadow-[0_0_30px_rgba(245,158,11,0.1)]">
+                        <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover opacity-50"></video>
+                        <canvas id="canvas-process" class="hidden"></canvas>
+                        
+                        <div class="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none" id="cam-overlay">
+                            <button id="startCamBtn" class="pointer-events-auto bg-amber-600 hover:bg-amber-500 text-white px-6 py-2 rounded-full font-bold transition flex items-center gap-2">
+                                <i class="fas fa-power-off"></i> 啟動感測
+                            </button>
+                        </div>
+                        
+                        <div id="calm-indicator" class="absolute top-4 right-4 w-4 h-4 rounded-full bg-gray-600 transition-colors z-20"></div>
+                        <div class="scan-line" id="scanLine" style="display:none;"></div>
+                    </div>
+
+                    <div class="text-xs text-gray-500" id="cam-status">等待啟動...</div>
+                </div>
+            `;
+            modalOverlay.classList.add('active');
+
+            const startBtn = document.getElementById('startCamBtn');
+            const video = document.getElementById('webcam');
+            const status = document.getElementById('cam-status');
+            const indicator = document.getElementById('calm-indicator');
+            const scanLine = document.getElementById('scanLine');
+            
+            startBtn.addEventListener('click', async () => {
+                soundEngine.init(); // Init Audio Context
+                try {
+                    status.innerText = "正在請求鏡頭權限...";
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+                    videoStream = stream;
+                    video.srcObject = stream;
+                    
+                    startBtn.style.display = 'none';
+                    scanLine.style.display = 'block';
+                    video.style.opacity = '1';
+                    status.innerText = "感測中... 請用手遮擋鏡頭";
+                    
+                    systemOverride = true; 
+                    startProcessing(video, indicator, status);
+
+                } catch (err) {
+                    console.error(err);
+                    status.innerText = "無法存取鏡頭 (請檢查權限)。已切換至模擬模式：點擊畫面模擬遮擋。";
+                    // Fallback
+                    const fallbackArea = video.parentElement;
+                    fallbackArea.style.cursor = "pointer";
+                    const simulateCover = (isCovering) => {
+                        targetCalmLevel = isCovering ? 1 : 0;
+                        indicator.style.backgroundColor = isCovering ? '#f59e0b' : '#4b5563';
+                        soundEngine.toggleWhiteNoise(isCovering);
+                        status.innerText = isCovering ? "安撫中 (模擬)" : "環境監測中 (模擬)";
+                    };
+                    fallbackArea.addEventListener('mousedown', () => simulateCover(true));
+                    fallbackArea.addEventListener('mouseup', () => simulateCover(false));
+                    fallbackArea.addEventListener('touchstart', () => simulateCover(true));
+                    fallbackArea.addEventListener('touchend', () => simulateCover(false));
+                }
+            });
+        }
+
+        function startProcessing(video, indicator, status) {
+            const canvas = document.getElementById('canvas-process');
+            const ctx = canvas.getContext('2d');
+            
+            const processLoop = () => {
+                if (!videoStream || !modalOverlay.classList.contains('active')) return;
+
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = 50; canvas.height = 50;
+                    ctx.drawImage(video, 0, 0, 50, 50);
+                    
+                    const frame = ctx.getImageData(0, 0, 50, 50);
+                    const data = frame.data;
+                    let brightness = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        brightness += (data[i] + data[i+1] + data[i+2]) / 3;
+                    }
+                    brightness /= (data.length / 4);
+
+                    // Threshold logic for "Covered"
+                    if (brightness < 40) {
+                        targetCalmLevel = 1; // Visual Calm
+                        indicator.style.backgroundColor = '#f59e0b';
+                        status.innerText = "偵測到覆蓋：安撫中 (白噪音播放)";
+                        status.style.color = "#f59e0b";
+                        soundEngine.toggleWhiteNoise(true); // Audio On
+                    } else {
+                        targetCalmLevel = 0; // Visual Alert
+                        indicator.style.backgroundColor = '#9333ea';
+                        status.innerText = "環境監測中... (ALERT)";
+                        status.style.color = "#9333ea";
+                        soundEngine.toggleWhiteNoise(false); // Audio Off
+                    }
+                }
+                animationFrameId = requestAnimationFrame(processLoop);
+            };
+            processLoop();
+        }
+
+        function closeModal() {
+            modalOverlay.classList.remove('active');
+            
+            // Clean up Camera
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            // Clean up Audio
+            soundEngine.toggleWhiteNoise(false);
+            
+            setTimeout(() => { systemOverride = false; }, 1000);
+        }
+
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+
+        // --- Anatomy Hover Logic ---
+        const anatomyPanel = document.getElementById('anatomy-panel');
+        const anatomyContent = document.getElementById('anatomy-content');
+        
+        const anatomyData = {
+            'fibers': { title: "液態矽膠光纖", text: "Liquid Silicone Optical Fibers。<br>模擬生物絨毛的親膚觸感，兼具高效導光與柔性形變能力。能細膩傳導光線變化。", color: "text-amber-400" },
+            'light': { title: "AI 情緒光譜轉譯", text: "Emotional Spectrum AI。<br>紫光代表高頻焦慮音訊 (Alert)；暖光代表安撫後平靜狀態 (Calm)；呼吸光則是背景白噪音的視覺化。", color: "text-purple-400" },
+            'sma': { title: "SMA 形狀記憶合金", text: "Shape Memory Alloy Driver。<br>核心動態引擎。隨噪音觸發「炸毛」防禦動態；內建電容感測，能精確偵測撫摸力道。", color: "text-blue-400" },
+            'memory': { title: "聲波向性記憶", text: "Sonic Tropism Memory。<br>類植物生長演算法。長期受單一方向噪音影響，底座與纖維將形成永久性的「風剪」有機形態。", color: "text-gray-300" }
+        };
+
+        function showAnatomyDetail(key) {
+            const data = anatomyData[key];
+            if (!data) return;
+            anatomyContent.innerHTML = `
+                <h3 class="text-lg font-bold ${data.color} mb-2 border-b border-gray-700 pb-2">${data.title}</h3>
+                <p class="text-gray-300 leading-relaxed">${data.text}</p>
+            `;
+            anatomyPanel.classList.add('active');
+        }
+    </script>
+
+    <!-- Three.js Implementation -->
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.002);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 30;
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Halo Geometry
+        const geometry = new THREE.BufferGeometry();
+        const particleCount = 2000;
+        const positions = [];
+        const originalPositions = [];
+        const radius = 8;
+        for (let i = 0; i < particleCount; i++) {
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            positions.push(x * 0.5, y * 0.5, z * 0.5); 
+            positions.push(x, y, z);
+            originalPositions.push(x, y, z);
+        }
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        const material = new THREE.LineBasicMaterial({ color: 0x8a2be2, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending });
+        const lines = new THREE.LineSegments(geometry, material);
+        scene.add(lines);
+
+        const coreGeo = new THREE.SphereGeometry(radius * 0.4, 32, 32);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x4b0082 });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        scene.add(core);
+
+        const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+        pointLight.position.set(10, 10, 10);
+        scene.add(pointLight);
+
+        // Interaction State
+        const mouse = new THREE.Vector2();
+        let targetCalmLevel = 0; 
+        let currentCalmLevel = 0;
+        let systemOverride = false; 
+
+        const colorAlert = new THREE.Color(0x9d4edd); 
+        const colorCalm = new THREE.Color(0xffb703); 
+        const colorDanger = new THREE.Color(0xff0000); 
+        const coreAlert = new THREE.Color(0x3c096c);
+        const coreCalm = new THREE.Color(0xfb8500);
+
+        // Mouse Move
+        document.addEventListener('mousemove', (event) => {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            const dist = Math.sqrt(mouse.x*mouse.x + mouse.y*mouse.y);
+            if (!systemOverride) {
+                targetCalmLevel = dist < 0.4 ? 1 : 0;
+            }
+        });
+
+        // System Map Trigger
+        window.triggerSystemState = function(stepIndex) {
+            document.querySelectorAll('.map-step').forEach(el => el.classList.remove('active-step'));
+            const stepEl = document.getElementById(`step-${stepIndex}`);
+            if(stepEl) stepEl.classList.add('active-step');
+
+            systemOverride = true;
+            
+            // Audio & Visual Trigger
+            soundEngine.init();
+            switch(stepIndex) {
+                case 0: // Noise
+                    targetCalmLevel = -0.5; 
+                    soundEngine.playTraffic(1); 
+                    break;
+                case 1: // Visual Alert
+                    targetCalmLevel = 0; 
+                    soundEngine.playAlert(); 
+                    break;
+                case 2: // Touch
+                    targetCalmLevel = 0.5; 
+                    soundEngine.playSweep(); 
+                    break;
+                case 3: // Calm
+                    targetCalmLevel = 1; 
+                    soundEngine.toggleWhiteNoise(true); // Temporary burst
+                    setTimeout(() => soundEngine.toggleWhiteNoise(false), 2000);
+                    break;
+            }
+            setTimeout(() => { systemOverride = false; }, 3000);
+        };
+
+        // Animation Loop
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            
+            currentCalmLevel += (targetCalmLevel - currentCalmLevel) * 0.05;
+
+            // Color
+            if (currentCalmLevel < 0) {
+                material.color.lerpColors(colorDanger, colorAlert, 1 + currentCalmLevel);
+                core.material.color.lerpColors(new THREE.Color(0x500000), coreAlert, 1 + currentCalmLevel);
+            } else {
+                material.color.lerpColors(colorAlert, colorCalm, currentCalmLevel);
+                core.material.color.lerpColors(coreAlert, coreCalm, currentCalmLevel);
+            }
+
+            // Shape
+            const positions = lines.geometry.attributes.position.array;
+            let spikeFactor = 1 - currentCalmLevel;
+            if (currentCalmLevel < 0) spikeFactor = 1.5; 
+            let flowFactor = Math.max(0, currentCalmLevel);
+
+            for (let i = 0; i < particleCount; i++) {
+                const idxEnd = i * 6 + 3;
+                const ox = originalPositions[i*3];
+                const oy = originalPositions[i*3+1];
+                const oz = originalPositions[i*3+2];
+
+                const jitterFreq = (currentCalmLevel < 0) ? 20 : 10;
+                const jitter = Math.sin(time * jitterFreq + i) * 0.2 * spikeFactor;
+                const waveX = Math.sin(time * 2 + oy * 0.5) * 1.5 * flowFactor;
+                const waveY = Math.cos(time * 1.5 + ox * 0.5) * 1.5 * flowFactor;
+
+                positions[idxEnd] = ox + jitter + waveX;
+                positions[idxEnd + 1] = oy + jitter + waveY;
+                positions[idxEnd + 2] = oz + jitter;
+            }
+            lines.geometry.attributes.position.needsUpdate = true;
+
+            const rotSpeed = 0.005 * spikeFactor + 0.001 * flowFactor;
+            lines.rotation.y += rotSpeed;
+            lines.rotation.z += rotSpeed * 0.5;
+
+            if (currentCalmLevel < -0.2) {
+                scene.position.x = (Math.random() - 0.5) * 0.1;
+                scene.position.y = (Math.random() - 0.5) * 0.1;
+            } else {
+                scene.position.x = 0; scene.position.y = 0;
+            }
+            
+            lines.rotation.x += (mouse.y * 0.5 - lines.rotation.x) * 0.05;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
